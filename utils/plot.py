@@ -6,7 +6,7 @@ from matplotlib.ticker import MaxNLocator
 from pandas.plotting import parallel_coordinates
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from .common import ATTRS, POS, ATTRSEX, FORMATION_POSITIONS, POS_COLORS
+from .common import ATTRS, POS, ATTRSEX, FORMATION_POSITIONS, POS_COLORS, OUTPUT_DIR
 from .util import df_with_pos, baseline_team
 from .cleaner import simplify_position
 
@@ -86,6 +86,11 @@ def plot_height_weight(df_players):
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.set_axisbelow(True)
 
+    top = sub.sort_values('Height', ascending=False).head(8)
+    for _, r in top.iterrows():
+        ax.annotate(r['Name'], (r['Height'], r['Weight']), fontsize=7, alpha=0.8)
+
+
     plt.tight_layout()
     plt.show()    
 
@@ -100,17 +105,18 @@ def plot_position_scatter_markers(df_players, k=8):
     for pos, (xcol,ycol,title) in combos.items():
         sub = df_with_pos(df_players, pos).dropna(subset=[xcol, ycol, 'OVR'])
         
-        fig, ax = plt.subplots(figsize=(7,6))
+        fig, ax = plt.subplots(figsize=(8, 6.5), dpi=300)
         sc = ax.scatter(
             sub[xcol], sub[ycol],
             c=sub['OVR'],
             cmap='viridis',
-            s=25,
-            alpha=0.6,
-            edgecolors='none'
+            alpha=0.75,
+            edgecolors='white',
+            linewidths=0.8
         )
 
-        plt.colorbar(sc, ax=ax, label='OVR')
+        cbar = plt.colorbar(sc, ax=ax)
+        cbar.set_label('OVR')
         ax.set_xlabel(xcol); ax.set_ylabel(ycol); ax.set_title(title)   
         # label top by OVR
         top = sub.sort_values('OVR', ascending=False).head(k)
@@ -132,6 +138,67 @@ def plot_goals_distribution(df_matches):
         seri.plot(kind='kde', ax=ax)
         ax.set_xlabel('Goals per match'); ax.set_ylabel('Density')
         ax.set_title(f'Distribution of {col}')
+
+def plot_ovr_between_nationality(df_players, top_n=15):
+    """
+    Boxplot of OVR by nationality.
+    """
+    df = df_players.copy()
+    
+    # count players per nation
+    nation_counts = df['Nation'].value_counts()
+    valid_nations = nation_counts.head(top_n).index
+
+    df_plot = df[df['Nation'].isin(valid_nations)]
+
+    # prepare boxplot data
+    grouped = df_plot.groupby('Nation')['OVR']
+    data = [grouped.get_group(n) for n in valid_nations]
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.boxplot(data, showfliers=False)
+    ax.set_xticks(range(1, len(valid_nations) + 1))
+    ax.set_xticklabels(valid_nations, rotation=45, ha='right')
+
+    ax.set_xlabel('Nationality')
+    ax.set_ylabel('OVR')
+    ax.set_title('Distribution of OVR across Nationalities')
+
+    # annotate sample size
+    for i, nation in enumerate(valid_nations, start=1):
+        ax.text(i, ax.get_ylim()[0], f'n={nation_counts[nation]}',
+                ha='center', va='top', fontsize=8)
+
+def plot_ovr_between_league(df_players, top_n=15):
+    """
+    Boxplot of OVR by League.
+    """
+    df = df_players.copy()
+    
+    # count players per league
+    nation_counts = df['League'].value_counts()
+    valid_leagues = nation_counts.head(top_n).index
+
+    df_plot = df[df['League'].isin(valid_leagues)]
+
+    # prepare boxplot data
+    grouped = df_plot.groupby('League')['OVR']
+    data = [grouped.get_group(n) for n in valid_leagues]
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.boxplot(data, showfliers=False)
+    ax.set_xticks(range(1, len(valid_leagues) + 1))
+    ax.set_xticklabels(valid_leagues, rotation=45, ha='right')
+
+    ax.set_xlabel('Leagues')
+    ax.set_ylabel('OVR')
+    ax.set_title('Distribution of OVR across Leagues')
+
+    # annotate sample size
+    for i, nation in enumerate(valid_leagues, start=1):
+        ax.text(i, ax.get_ylim()[0], f'n={nation_counts[nation]}',
+                ha='center', va='top', fontsize=8)
+
 
 def plot_league_mean_goals(df_matches):
     """
@@ -394,9 +461,10 @@ def build_formation_data(baseline_dict, df_players):
     return data
 
 
-def plot_formation(df_players, formation_positions=FORMATION_POSITIONS, pos_colors=POS_COLORS):
-    baseline_dict = baseline_team(df_players)
-    data = build_formation_data(baseline_dict, df_players)
+def plot_formation(df_players, formation_positions=FORMATION_POSITIONS, pos_colors=POS_COLORS, player_dict=None):
+    if player_dict == None:
+        player_dict = baseline_team(df_players)
+    data = build_formation_data(player_dict, df_players)
 
     fig, ax = plt.subplots(figsize=(10, 14))
     draw_football_pitch(ax)
